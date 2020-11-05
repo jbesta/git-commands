@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+
+COLOR_VALUE="\033[33m"
+COLOR_ERROR="\033[1;31m"
+COLOR_DEFAULT="\033[0m"
+
+function exit_error() {
+  >&2 echo -e "$1"
+  [ "$2" == "true" ] && usage
+  exit 1
+}
+
+function usage() {
+  echo "Usage: $(basename "$0") [-s] <source> <target>"
+  echo ""
+  echo "Options:"
+  echo "  -s,--simple   do not create merge branch"
+}
+
+function create_and_switch_to_branch() {
+  echo "create branch: $1"
+  git checkout -b "${1}" -q || exit_error "Branch ${1} already exists"
+}
+
+function checkout_branch() {
+  echo "checkout: ${1}"
+  git checkout "$1" -q || exit_error "Unable to checkout ${1}"
+}
+
+function pull_branch() {
+  echo "pull: ${1}"
+  git pull -q || exit_error "Unable to pull ${1}"
+}
+
+function merge() {
+  echo "merge: ${1}"
+  git merge "${1}"
+}
+
+function normalize_name() {
+  echo "${1}" | sed 's/\//_/g'
+}
+
+simple=false
+
+# https://medium.com/@Drew_Stokes/bash-argument-parsing-54f3b81a6a8f
+PARAMS=""
+while (( "$#" )); do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --) # end argument parsing
+      shift
+      break
+      ;;
+    -s|--simple)
+      simple=true
+      shift
+      ;;
+    -*|--*=) # unsupported flags
+      die "Unsupported flag $1"
+      ;;
+    *) # preserve positional arguments
+      PARAMS="$PARAMS $1"
+      shift
+      ;;
+  esac
+done
+
+# set positional arguments in their proper place
+eval set -- "$PARAMS"
+
+[ $# -lt 1 ] && exit_error "Missing source" true
+SOURCE="$1"
+
+[ $# -lt 2 ] && exit_error "Missing target" true
+TARGET="$2"
+
+WORKING_TREE_STAT=$(git diff --stat)
+
+if [[ $WORKING_TREE_STAT != '' ]]; then
+  exit_error "${COLOR_ERROR}There are uncommited changes in your working tree. Commit them or stash them.${COLOR_DEFAULT}
+
+${WORKING_TREE_STAT}"
+fi
+
+
+checkout_branch "${SOURCE}"
+pull_branch "${SOURCE}"
+checkout_branch "${TARGET}"
+pull_branch "${TARGET}"
+
+if [ "$simple" = "false" ]; then
+  echo -e "Creating merge branch ${COLOR_VALUE}${SOURCE}${COLOR_DEFAULT} --> ${COLOR_VALUE}${TARGET}${COLOR_DEFAULT}"
+  MERGE_BRANCH="merge/$(normalize_name "$SOURCE")_to_$(normalize_name "$TARGET")"
+  create_and_switch_to_branch "${MERGE_BRANCH}"
+fi
+
+merge "${SOURCE}"
