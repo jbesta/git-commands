@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+
+color_value="\033[33m"
+color_error="\033[1;31m"
+color_default="\033[0m"
+
+function usage() {
+  echo "Usage: $(basename "$0") <branch_name>"
+}
+
+function exit_error() {
+  >&2 echo -e "$1"
+  [ "$2" == "true" ] && usage
+  exit 1
+}
+
+function create_and_switch_to_branch() {
+  echo "create branch: $1"
+  git checkout -b "${1}" -q || exit_error "Branch ${1} already exists"
+}
+
+function checkout_branch() {
+  echo "checkout: ${1}"
+  git checkout "$1" -q || exit_error "Unable to checkout ${1}"
+}
+
+function pull_branch() {
+  echo "pull: ${1}"
+  git pull -q || exit_error "Unable to pull ${1}"
+}
+
+function rebase() {
+  echo "rebase: ${1}"
+  git rebase -i "${1}"
+}
+
+# https://medium.com/@Drew_Stokes/bash-argument-parsing-54f3b81a6a8f
+PARAMS=""
+while (( "$#" )); do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --) # end argument parsing
+      shift
+      break
+      ;;
+    -*|--*=) # unsupported flags
+      die "Unsupported flag $1"
+      ;;
+    *) # preserve positional arguments
+      PARAMS="$PARAMS $1"
+      shift
+      ;;
+  esac
+done
+
+# set positional arguments in their proper place
+eval set -- "$PARAMS"
+
+[ $# -lt 1 ] && exit_error "Missing branch_name" true
+branch_name="$1"
+
+WORKING_TREE_STAT=$(git diff --stat)
+
+if [[ $WORKING_TREE_STAT != '' ]]; then
+  exit_error "${color_error}There are uncommited changes in your working tree. Commit them or stash them.${color_default}
+
+${WORKING_TREE_STAT}"
+fi
+
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+checkout_branch "${branch_name}"
+pull_branch "${branch_name}"
+checkout_branch "${current_branch}"
+rebase "${branch_name}"
