@@ -1,2 +1,70 @@
-#!/bin/sh
-git branch --merged | egrep -v "(^\*|master|develop)" | xargs git branch -d
+#!/usr/bin/env bash
+
+function usage() {
+  echo "$(basename $0)"
+  echo "Options:"
+  echo "  -e,--exclude <branch>"
+}
+
+function list() {
+  for i in "$@"; do
+    echo "$i"
+  done
+}
+
+function list_join() {
+  local delimiter="$1"
+  local acc
+  read acc
+  while read elem; do
+    acc="${acc}${delimiter}${elem}"
+  done
+  echo "$acc"
+}
+
+excluded_branches=""
+
+# https://medium.com/@Drew_Stokes/bash-argument-parsing-54f3b81a6a8f
+PARAMS=""
+while (( "$#" )); do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -e|--exlude)
+      [ ! -z "$excluded_branches" ] && excluded_branches+=" "
+      excluded_branches+="$2"
+      shift 2
+      ;;
+    --) # end argument parsing
+      shift
+      break
+      ;;
+    -*|--*=) # unsupported flags
+      exit_error "Unsupported flag $1"
+      ;;
+    *) # preserve positional arguments
+      PARAMS="$PARAMS $1"
+      shift
+      ;;
+  esac
+done
+
+# set positional arguments in their proper place
+eval set -- "$PARAMS"
+
+[ -z "$excluded_branches" ] && excluded_branches="master develop release/ hotfix/"
+
+grep_expr="(^\*|$(list $excluded_branches | list_join "|"))"
+branches=$(git branch --merged | egrep -v "$grep_expr")
+nr_branches=0
+[ ! -z "$branches" ] && nr_branches=$(echo "$branches" | wc -l)
+
+echo "Found $nr_branches branch$([ "$nr_branches" -ne 1 ] && echo "es") to delete"
+
+[ "$nr_branches" -le 0 ] && exit 0
+
+for branch in $branches; do
+  git branch -d "$branch"
+done
