@@ -23,6 +23,7 @@ function list_join() {
 }
 
 excluded_branches=""
+dry_run=false
 
 # https://medium.com/@Drew_Stokes/bash-argument-parsing-54f3b81a6a8f
 PARAMS=""
@@ -36,6 +37,10 @@ while (( "$#" )); do
       [ ! -z "$excluded_branches" ] && excluded_branches+=" "
       excluded_branches+="$2"
       shift 2
+      ;;
+    -d|--dry-run)
+      dry_run=true
+      shift
       ;;
     --) # end argument parsing
       shift
@@ -54,7 +59,7 @@ done
 # set positional arguments in their proper place
 eval set -- "$PARAMS"
 
-[ -z "$excluded_branches" ] && excluded_branches="master develop release/ hotfix/"
+[ -z "$excluded_branches" ] && excluded_branches="master develop"
 
 grep_expr="(^\*|$(list $excluded_branches | list_join "|"))"
 branches=$(git branch --merged | egrep -v "$grep_expr")
@@ -66,5 +71,9 @@ echo "Found $nr_branches branch$([ "$nr_branches" -ne 1 ] && echo "es") to delet
 [ "$nr_branches" -le 0 ] && exit 0
 
 for branch in $branches; do
-  git branch -d "$branch"
+  if [ "$dry_run" = "true" ]; then
+    echo "[dry-run] Delete branch $branch"
+  else
+    git branch -d "$branch"
+  fi
 done
