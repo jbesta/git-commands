@@ -60,7 +60,7 @@ while (( "$#" )); do
       shift
       ;;
     -*|--*=) # unsupported flags
-      die "Unsupported flag $1"
+      exit_error "Unsupported flag $1"
       ;;
     *) # preserve positional arguments
       PARAMS="$PARAMS $1"
